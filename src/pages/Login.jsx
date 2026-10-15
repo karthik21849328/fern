@@ -24,7 +24,7 @@ export default function Login() {
       <div className="lock-panel">
         <div className="lock-hero">
           <p className="eyebrow">Resort reception</p>
-          <h1>XYZ</h1>
+          <h1>Fenni n Ferns</h1>
           <p>Front desk</p>
         </div>
         <form className="lock-card" onSubmit={onSubmit}>

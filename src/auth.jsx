@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from 'react';
 
-const KEY = 'xyz-desk-open';
+const KEY = 'Fenni n Ferns-desk-open';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {

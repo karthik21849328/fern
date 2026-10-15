@@ -1,6 +1,6 @@
 import { PAYMENT_MODES } from './constants.js';
 
-const STORAGE_KEY = 'xyz-resort-v1';
+const STORAGE_KEY = 'Fenni n Ferns-resort-v1';
 
 export function createDefaultSettings() {
   return {

@@ -343,7 +343,7 @@ function Receipt({ stay }) {
   return (
     <div className="stack sheet">
       <div>
-        <p className="eyebrow">XYZ Resort</p>
+        <p className="eyebrow">Fenni n Ferns Resort</p>
         <h1 className="page-title">Guest bill</h1>
         <p className="lede">Room {stay.room} · {stay.paymentMode}</p>
       </div>

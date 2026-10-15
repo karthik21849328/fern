@@ -45,7 +45,7 @@ export default function Settings() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `xyz-resort-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `Fenni n Ferns-resort-backup-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
     notify('Backup downloaded');
@@ -70,7 +70,7 @@ export default function Settings() {
     <div className="stack">
       <div>
         <h1 className="page-title">Settings</h1>
-        <p className="lede">Rates and staff for XYZ Resort. Guest records stay in this browser on this device.</p>
+        <p className="lede">Rates and staff for Fenni n Ferns Resort. Guest records stay in this browser on this device.</p>
       </div>
 
       <section className="card stack">

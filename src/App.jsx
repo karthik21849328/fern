@@ -28,7 +28,7 @@ function titleFor(route, stays) {
     if (!stay) return 'Stay';
     return stay.status === 'out' ? `Bill · ${stay.room}` : `Room ${stay.room}`;
   }
-  return 'XYZ Resort';
+  return 'Fenni n Ferns Resort';
 }
 
 function Shell() {
@@ -38,7 +38,7 @@ function Shell() {
   const showBack = !['dashboard', 'checkin', 'guests', 'history'].includes(route.name);
 
   useEffect(() => {
-    document.title = `${title} · XYZ Resort`;
+    document.title = `${title} · Fenni n Ferns Resort`;
     window.scrollTo(0, 0);
     mainRef.current?.scrollTo(0, 0);
   }, [route.name, route.id, route.room, title]);
@@ -49,7 +49,7 @@ function Shell() {
         <div className="brand">
           <Mark />
           <div className="brand-copy">
-            <strong>XYZ</strong>
+            <strong>Fenni n Ferns</strong>
             <span>Resort reception</span>
           </div>
         </div>
