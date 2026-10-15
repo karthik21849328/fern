@@ -2,6 +2,10 @@ import { PAYMENT_MODES } from './constants.js';
 
 const STORAGE_KEY = 'Fenni n Ferns-resort-v1';
 
+function photoUrl(value) {
+  return typeof value === 'string' && value.startsWith('data:image/') ? value : null;
+}
+
 export function createDefaultSettings() {
   return {
     roomRate: 2500,
@@ -63,8 +67,8 @@ export function sanitizeState(data) {
     source: String(stay.source || ''),
     paymentMode: PAYMENT_MODES.includes(stay.paymentMode) ? stay.paymentMode : 'Cash',
     roomRate: Math.max(0, Number(stay.roomRate) || 0),
-    idFront: typeof stay.idFront === 'string' ? stay.idFront : null,
-    idBack: typeof stay.idBack === 'string' ? stay.idBack : null,
+    idFront: photoUrl(stay.idFront),
+    idBack: photoUrl(stay.idBack),
     extras: Array.isArray(stay.extras)
       ? stay.extras.map((extra) => ({
           id: String(extra.id || crypto.randomUUID()),

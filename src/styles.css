@@ -73,8 +73,8 @@ h1, h2, .page-title, .top-title, .room-no, .money, .bill-total strong, .stat-val
 
 .lock-hero h1 {
   margin: 8px 0;
-  font-size: 4.6rem;
-  line-height: 0.85;
+  font-size: clamp(2.7rem, 12vw, 4.2rem);
+  line-height: 0.95;
   font-weight: 560;
 }
 
@@ -104,7 +104,12 @@ h1, h2, .page-title, .top-title, .room-no, .money, .bill-total strong, .stat-val
     background: var(--bg);
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
   }
-  .lock-hero { flex: none; padding: 36px 24px 12px; }
+  .lock-hero {
+    flex: none;
+    padding: 36px 24px 12px;
+    color: var(--ink);
+  }
+  .lock-hero .eyebrow { color: #8a6a2f; }
   .lock-card { border-radius: 0; }
 }
 
@@ -308,7 +313,9 @@ h2 { margin: 0; font-size: 1.25rem; font-weight: 600; }
   padding: 16px;
 }
 
-.fold summary { cursor: pointer; font-weight: 650; }
+.fold summary { cursor: pointer; font-weight: 600; }
+
+.fold .stack { margin-top: 12px; }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
 
@@ -357,7 +364,7 @@ h2 { margin: 0; font-size: 1.25rem; font-weight: 600; }
   background: transparent;
   border-radius: 10px;
   padding: 10px 8px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .seg button.on {
@@ -394,7 +401,7 @@ h2 { margin: 0; font-size: 1.25rem; font-weight: 600; }
   border-radius: 14px;
   padding: 12px 16px;
   background: var(--sand);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .btn.primary { background: var(--green); color: #f7f3ea; }
@@ -412,7 +419,7 @@ h2 { margin: 0; font-size: 1.25rem; font-weight: 600; }
   border: 0;
   padding: 0;
   color: var(--green);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .danger-text { color: var(--terra); border-color: transparent; }
@@ -441,7 +448,7 @@ h2 { margin: 0; font-size: 1.25rem; font-weight: 600; }
   border-radius: 14px;
   background: var(--green-soft);
   color: var(--green);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .preview-bill strong, .dock .money { font-size: 1.45rem; }
@@ -679,6 +686,7 @@ h2 { margin: 0; font-size: 1.25rem; font-weight: 600; }
   .brand { align-items: center; gap: 10px; padding: 6px 8px 18px; }
 
   .brand-copy { display: flex; flex-direction: column; }
+  .brand-copy strong { font-size: 1.35rem; line-height: 1.05; }
 
   .brand-copy span { color: var(--muted); font-size: 0.8rem; }
 

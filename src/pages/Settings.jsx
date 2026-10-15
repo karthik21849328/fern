@@ -173,8 +173,10 @@ export default function Settings() {
         </div>
       </section>
 
-      <button type="button" className="btn ghost" onClick={lock}>Lock desk</button>
-      <button type="button" className="btn danger" onClick={() => setConfirmReset(true)}>Erase all data on this device</button>
+      <div className="row-actions">
+        <button type="button" className="btn ghost" onClick={lock}>Lock desk</button>
+        <button type="button" className="btn danger" onClick={() => setConfirmReset(true)}>Erase all data</button>
+      </div>
 
       {pendingImport ? (
         <Dialog title="Replace current records?" onClose={() => setPendingImport(null)}>
