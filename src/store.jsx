@@ -36,29 +36,29 @@ function roomStayToLocal(room, roomRate) {
 }
 
 function documentToStay(doc, roomNumber, roomUuid, fallback = {}) {
-  if (!doc && !fallback.id) return null;
+  const id = String(doc?.id || doc?.stay_id || fallback.id || crypto.randomUUID());
   return {
-    id: String(doc?.id || fallback.id || ''),
+    id,
     room: String(roomNumber || fallback.room || ''),
     roomUuid: roomUuid || fallback.roomUuid || '',
-    guestName: doc?.guest_name || fallback.guestName || 'Guest',
+    guestName: doc?.guest_name || doc?.guestName || fallback.guestName || 'Guest',
     phone: doc?.phone || fallback.phone || '',
     address: doc?.address || fallback.address || '',
     adults: Number(doc?.adults ?? fallback.adults) || 1,
     children: Number(doc?.children ?? fallback.children) || 0,
-    checkIn: doc?.check_in || fallback.checkIn || new Date().toISOString(),
-    checkOut: doc?.check_out || fallback.checkOut || new Date().toISOString(),
-    actualCheckOut: doc?.actual_check_out || fallback.actualCheckOut || null,
+    checkIn: doc?.check_in || doc?.checkIn || fallback.checkIn || new Date().toISOString(),
+    checkOut: doc?.check_out || doc?.checkOut || fallback.checkOut || new Date().toISOString(),
+    actualCheckOut: doc?.actual_check_out || doc?.actualCheckOut || fallback.actualCheckOut || null,
     source: doc?.source || fallback.source || '',
-    paymentMode: doc?.payment_mode || fallback.paymentMode || 'Cash',
-    roomRate: Number(doc?.room_rate ?? fallback.roomRate) || 0,
-    idFront: doc?.id_front_url || fallback.idFront || null,
-    idBack: doc?.id_back_url || fallback.idBack || null,
+    paymentMode: doc?.payment_mode || doc?.paymentMode || fallback.paymentMode || 'Cash',
+    roomRate: Number(doc?.room_rate ?? doc?.roomRate ?? fallback.roomRate) || 0,
+    idFront: doc?.id_front_url || doc?.idFront || fallback.idFront || null,
+    idBack: doc?.id_back_url || doc?.idBack || fallback.idBack || null,
     extras: Array.isArray(doc?.extras) ? doc.extras : (fallback.extras || []),
     discount: Number(doc?.discount ?? fallback.discount) || 0,
     status: doc?.status === 'out' || fallback.status === 'out' ? 'out' : 'in',
-    settledTotal: doc?.settled_total ?? fallback.settledTotal ?? null,
-    createdAt: doc?.created_at || fallback.createdAt || new Date().toISOString(),
+    settledTotal: doc?.settled_total ?? doc?.settledTotal ?? fallback.settledTotal ?? null,
+    createdAt: doc?.created_at || doc?.createdAt || fallback.createdAt || new Date().toISOString(),
   };
 }
 
@@ -178,13 +178,19 @@ export function ResortProvider({ children }) {
 
     await refreshRemote();
 
-    const stayId = String(result?.stay_id || result?.document?.id || '');
-    return documentToStay(
-      result?.document,
+    const stayId = String(
+      result?.stay_id
+      || result?.document?.id
+      || result?.document?.stay_id
+      || '',
+    );
+
+    const stay = documentToStay(
+      result?.document || result,
       input.room,
       input.roomUuid,
       {
-        id: stayId,
+        id: stayId || crypto.randomUUID(),
         room: input.room,
         roomUuid: input.roomUuid,
         guestName: input.guestName,
@@ -202,6 +208,16 @@ export function ResortProvider({ children }) {
         status: 'in',
       },
     );
+
+    // Ensure the stay exists in memory even if rooms refresh was slow/stale.
+    setStays((current) => {
+      if (current.some((item) => item.id === stay.id)) {
+        return current.map((item) => (item.id === stay.id ? { ...item, ...stay, status: 'in' } : item));
+      }
+      return [stay, ...current];
+    });
+
+    return stay;
   }, [token, refreshRemote]);
 
   const checkoutStay = useCallback(async ({ stayId, billThrough, discount, paymentMode }) => {

@@ -103,10 +103,11 @@ export default function CheckIn({ initialRoom = '' }) {
 
     setSubmitting(true);
     try {
+      const guestName = form.guestName.trim().replace(/\s+/g, ' ');
       const stay = await checkIn({
         room: form.room,
         roomUuid: selectedRoom.id,
-        guestName: form.guestName.trim().replace(/\s+/g, ' '),
+        guestName,
         phone: form.phone.trim(),
         address: form.address.trim(),
         adults: form.adults,
@@ -119,7 +120,11 @@ export default function CheckIn({ initialRoom = '' }) {
         idFront: form.idFront,
         idBack: form.idBack,
       });
-      notify(`Checked ${stay.guestName} into room ${stay.room}`);
+      if (!stay?.id) {
+        setSubmitError('Check-in may have saved, but stay details were missing. Refresh Home and open the room.');
+        return;
+      }
+      notify(`Checked ${stay.guestName || guestName} into room ${stay.room || form.room}`);
       go({ name: 'stay', id: stay.id });
     } catch (err) {
       setSubmitError(err?.message || 'Check-in failed. Try again.');
