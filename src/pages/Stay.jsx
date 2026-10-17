@@ -358,48 +358,51 @@ function ExtraForm({ stay, onRemove }) {
 }
 
 function Receipt({ stay }) {
-  const { removeStay, go, notify } = useResort();
+  const { go } = useResort();
   const bill = billFor(stay);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <div className="stack sheet">
       <div>
         <p className="eyebrow">Fenni n Ferns Resort</p>
-        <h1 className="page-title">Guest bill</h1>
-        <p className="lede">Room {stay.room} · {stay.paymentMode}</p>
+        <h1 className="page-title">{stay.guestName || 'Guest'}</h1>
+        <p className="lede">Room {stay.room} · {stay.paymentMode} · settled</p>
       </div>
       <BillView stay={stay} bill={bill} paymentMode={stay.paymentMode} />
       <section className="card stack tight">
-        <h2>{stay.guestName || 'Guest'}</h2>
-        <p>{stay.phone}</p>
-        <p className="address">{stay.address}</p>
-        <p className="hint">Checked in from {stay.source}</p>
+        <h2>Stay details</h2>
+        <p><strong>Phone</strong> · {stay.phone || '—'}</p>
+        <p className="address"><strong>Address</strong> · {stay.address || '—'}</p>
+        <p className="hint">Adults {stay.adults || 0} · Children {stay.children || 0}</p>
+        <p className="hint">Checked in from {stay.source || '—'}</p>
         <p className="hint">Arrived {formatFull(stay.checkIn)}</p>
         <p className="hint">Billed through {formatFull(stay.checkOut)}</p>
         {stay.actualCheckOut ? <p className="hint">Settled {formatFull(stay.actualCheckOut)}</p> : null}
+        {stay.settledTotal != null ? <p className="hint">Collected {inr(stay.settledTotal)}</p> : null}
+        <p className="hint">Nightly rate {inr(stay.roomRate)}</p>
       </section>
+      {(stay.extras || []).length > 0 ? (
+        <section className="card stack tight">
+          <h2>Extras</h2>
+          {stay.extras.map((extra) => (
+            <div className="extra-row" key={extra.id}>
+              <div>
+                <strong>{extra.name} × {extra.qty}</strong>
+                <div className="hint">{extra.addedBy || 'Staff'} · {formatWhen(extra.addedAt)} · {inr(extra.unitPrice)} each</div>
+              </div>
+              <span>{inr((extra.qty || 0) * (extra.unitPrice || 0))}</span>
+            </div>
+          ))}
+        </section>
+      ) : null}
       <div className="no-print">
+        <div className="label">Photo ID</div>
         <IdThumbs front={stay.idFront} back={stay.idBack} name={stay.guestName || 'Guest'} />
       </div>
       <div className="row-actions no-print">
         <button type="button" className="btn ghost" onClick={() => window.print()}>Print bill</button>
-        <button type="button" className="btn primary" onClick={() => go({ name: 'dashboard' })}>Done</button>
+        <button type="button" className="btn primary" onClick={() => go({ name: 'history' })}>Back to history</button>
       </div>
-      <button type="button" className="btn ghost danger-text no-print" onClick={() => setConfirmDelete(true)}>Delete this record</button>
-      {confirmDelete ? (
-        <Dialog title="Delete this bill?" onClose={() => setConfirmDelete(false)}>
-          <p>This removes the stay from history on this device.</p>
-          <div className="dialog-actions">
-            <button type="button" className="btn ghost" onClick={() => setConfirmDelete(false)}>Keep</button>
-            <button type="button" className="btn danger" onClick={() => {
-              removeStay(stay.id);
-              notify('Record deleted');
-              go({ name: 'history' });
-            }}>Delete</button>
-          </div>
-        </Dialog>
-      ) : null}
     </div>
   );
 }

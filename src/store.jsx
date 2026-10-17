@@ -4,8 +4,10 @@ import {
   addStayExtra as addStayExtraApi,
   checkInStay as checkInStayApi,
   checkoutStay as checkoutStayApi,
+  fetchHistory,
   fetchRooms,
   fetchStaff,
+  mapStayDocument,
   removeStayExtra as removeStayExtraApi,
 } from './lib/api.js';
 import { clearBrowserCache, createDefaultSettings } from './lib/storage.js';
@@ -43,29 +45,58 @@ function roomStayToLocal(room, roomRate) {
 }
 
 function documentToStay(doc, roomNumber, roomUuid, fallback = {}) {
-  const id = String(doc?.id || doc?.stay_id || fallback.id || crypto.randomUUID());
+  const mapped = mapStayDocument(
+    { ...fallback, ...doc, room_num: roomNumber || doc?.room_num || fallback.room },
+    roomNumber || fallback.room,
+  );
+  if (!mapped) {
+    return {
+      id: String(fallback.id || crypto.randomUUID()),
+      room: String(roomNumber || fallback.room || ''),
+      roomUuid: roomUuid || fallback.roomUuid || '',
+      guestName: fallback.guestName || 'Guest',
+      phone: fallback.phone || '',
+      address: fallback.address || '',
+      adults: fallback.adults || 1,
+      children: fallback.children || 0,
+      checkIn: fallback.checkIn || new Date().toISOString(),
+      checkOut: fallback.checkOut || new Date().toISOString(),
+      actualCheckOut: fallback.actualCheckOut || null,
+      source: fallback.source || '',
+      paymentMode: fallback.paymentMode || 'Cash',
+      roomRate: Number(fallback.roomRate) || 0,
+      idFront: fallback.idFront || null,
+      idBack: fallback.idBack || null,
+      extras: fallback.extras || [],
+      discount: Number(fallback.discount) || 0,
+      status: fallback.status === 'out' ? 'out' : 'in',
+      settledTotal: fallback.settledTotal ?? null,
+      createdAt: fallback.createdAt || new Date().toISOString(),
+    };
+  }
   return {
-    id,
-    room: String(roomNumber || fallback.room || ''),
-    roomUuid: roomUuid || fallback.roomUuid || '',
-    guestName: doc?.guest_name || doc?.guestName || fallback.guestName || 'Guest',
-    phone: doc?.phone || fallback.phone || '',
-    address: doc?.address || fallback.address || '',
-    adults: Number(doc?.adults ?? fallback.adults) || 1,
-    children: Number(doc?.children ?? fallback.children) || 0,
-    checkIn: doc?.check_in || doc?.checkIn || fallback.checkIn || new Date().toISOString(),
-    checkOut: doc?.check_out || doc?.checkOut || fallback.checkOut || new Date().toISOString(),
-    actualCheckOut: doc?.actual_check_out || doc?.actualCheckOut || fallback.actualCheckOut || null,
-    source: doc?.source || fallback.source || '',
-    paymentMode: doc?.payment_mode || doc?.paymentMode || fallback.paymentMode || 'Cash',
-    roomRate: Number(doc?.room_rate ?? doc?.roomRate ?? fallback.roomRate) || 0,
-    idFront: doc?.id_front_url || doc?.idFront || fallback.idFront || null,
-    idBack: doc?.id_back_url || doc?.idBack || fallback.idBack || null,
-    extras: Array.isArray(doc?.extras) ? doc.extras : (fallback.extras || []),
-    discount: Number(doc?.discount ?? fallback.discount) || 0,
-    status: doc?.status === 'out' || fallback.status === 'out' ? 'out' : 'in',
-    settledTotal: doc?.settled_total ?? doc?.settledTotal ?? fallback.settledTotal ?? null,
-    createdAt: doc?.created_at || doc?.createdAt || fallback.createdAt || new Date().toISOString(),
+    ...mapped,
+    id: mapped.id || String(fallback.id || crypto.randomUUID()),
+    room: String(roomNumber || mapped.room || fallback.room || ''),
+    roomUuid: roomUuid || mapped.roomUuid || fallback.roomUuid || '',
+    guestName: mapped.guestName || fallback.guestName || 'Guest',
+    phone: mapped.phone || fallback.phone || '',
+    address: mapped.address || fallback.address || '',
+    adults: mapped.adults || fallback.adults || 1,
+    children: mapped.children ?? fallback.children ?? 0,
+    checkIn: mapped.checkIn || fallback.checkIn || new Date().toISOString(),
+    checkOut: mapped.checkOut || fallback.checkOut || new Date().toISOString(),
+    actualCheckOut: mapped.actualCheckOut || fallback.actualCheckOut || null,
+    source: mapped.source || fallback.source || '',
+    paymentMode: mapped.paymentMode || fallback.paymentMode || 'Cash',
+    roomRate: Number(mapped.roomRate || fallback.roomRate) || 0,
+    idFront: mapped.idFront || fallback.idFront || null,
+    idBack: mapped.idBack || fallback.idBack || null,
+    extras: mapped.extras?.length ? mapped.extras : (fallback.extras || []),
+    discount: Number(mapped.discount ?? fallback.discount) || 0,
+    status: mapped.status === 'out' || fallback.status === 'out' ? 'out' : 'in',
+    settledTotal: mapped.settledTotal ?? fallback.settledTotal ?? null,
+    createdAt: mapped.createdAt || fallback.createdAt || new Date().toISOString(),
   };
 }
 
@@ -91,9 +122,10 @@ export function ResortProvider({ children }) {
     setRemoteLoading(true);
     setRemoteError('');
     try {
-      const [allRooms, checkoutRooms, nextStaff] = await Promise.all([
+      const [allRooms, checkoutRooms, pastStays, nextStaff] = await Promise.all([
         fetchRooms(token, 'all'),
         fetchRooms(token, 'checkout').catch(() => []),
+        fetchHistory(token).catch(() => []),
         fetchStaff(),
       ]);
 
@@ -125,13 +157,11 @@ export function ResortProvider({ children }) {
 
       setRooms(nextRooms);
       setStaff(nextStaff);
-      // Keep checked-out stays from this session for History / receipts only.
-      // Open stays are always replaced from the API.
-      setStays((current) => {
-        const history = current.filter((stay) => stay.status === 'out');
-        const historyIds = new Set(history.map((stay) => stay.id));
-        const mergedOpen = openStays.filter((stay) => !historyIds.has(stay.id));
-        return [...mergedOpen, ...history];
+      // Open stays + checkout history both come from the server.
+      setStays(() => {
+        const historyIds = new Set(pastStays.map((stay) => stay.id));
+        const open = openStays.filter((stay) => !historyIds.has(stay.id));
+        return [...open, ...pastStays];
       });
     } catch (err) {
       if (err?.status === 401) {

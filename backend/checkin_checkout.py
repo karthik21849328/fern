@@ -176,15 +176,63 @@ def compute_bill(stay, bill_through=None, discount=None):
     }
 
 
+def list_history(db, limit=200):
+    """Checked-out stays for History screen, newest first."""
+    try:
+        limit = max(1, min(int(limit), 500))
+    except (TypeError, ValueError):
+        limit = 200
+
+    stays = list(
+        db["stays"].find(
+            {"status": "out"},
+            {"_id": 0},
+        ).sort([("actual_check_out", -1), ("check_out", -1)]).limit(limit)
+    )
+
+    room_ids = [stay.get("room_id") for stay in stays if stay.get("room_id")]
+    rooms_by_uuid = {}
+    if room_ids:
+        for room in db["rooms"].find(
+            {"uuid": {"$in": room_ids}},
+            {"_id": 0, "uuid": 1, "room_num": 1},
+        ):
+            rooms_by_uuid[room.get("uuid")] = room
+
+    items = []
+    for stay in stays:
+        extras = []
+        for item in stay.get("extras") or []:
+            normalized = normalize_extra(item)
+            if normalized and normalized["name"]:
+                extras.append(normalized)
+
+        room = rooms_by_uuid.get(stay.get("room_id")) or {}
+        items.append({
+            **stay,
+            "room_num": room.get("room_num"),
+            "extras": extras,
+        })
+
+    return response(200, {
+        "collection": "stays",
+        "type": "history",
+        "items": items,
+    })
+
+
 def list_rooms(db, request_type):
     mapping = {
         "checkin": "vacant",
         "checkout": "occupied",
         "all": "all",
         "": "all",
+        "history": "history",
     }
+    if request_type == "history":
+        return list_history(db)
     if request_type not in mapping:
-        return response(400, {"error": "type must be one of: checkin, checkout, all"})
+        return response(400, {"error": "type must be one of: checkin, checkout, all, history"})
 
     status_filter = mapping[request_type]
     for_checkout = request_type == "checkout"

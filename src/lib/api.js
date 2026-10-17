@@ -50,6 +50,7 @@ function mapStay(stay) {
     status: stay.status === 'out' ? 'out' : 'in',
     actualCheckOut: stay.actual_check_out || stay.actualCheckOut || null,
     settledTotal: stay.settled_total ?? stay.settledTotal ?? null,
+    createdAt: stay.created_at || stay.createdAt || null,
   };
 }
 
@@ -72,6 +73,16 @@ export async function loginWithPassword(password) {
   if (!response.ok) throw apiError(response, data);
   if (!data?.token) throw new Error('No token returned');
   return data.token;
+}
+
+export function mapStayDocument(item, roomNumber = '') {
+  const stay = mapStay(item);
+  if (!stay) return null;
+  return {
+    ...stay,
+    room: String(roomNumber || item.room_num || item.room || stay.room || ''),
+    roomUuid: String(item.room_id || item.roomUuid || ''),
+  };
 }
 
 export async function fetchRooms(token, type = 'all') {
@@ -206,6 +217,20 @@ export async function removeStayExtra(token, payload) {
     ...data,
     extras: Array.isArray(data?.extras) ? data.extras.map(mapExtra).filter(Boolean) : [],
   };
+}
+
+export async function fetchHistory(token) {
+  const url = new URL(ROOMS_URL);
+  url.searchParams.set('type', 'history');
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = await parseJson(response);
+  if (!response.ok) throw apiError(response, data);
+  const items = Array.isArray(data?.items) ? data.items : [];
+  return items.map((item) => mapStayDocument(item)).filter((stay) => stay?.id);
 }
 
 export async function fetchStaff() {
