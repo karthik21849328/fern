@@ -32,7 +32,7 @@ function titleFor(route, stays) {
 }
 
 function Shell() {
-  const { route, stays, toast, storageError, go, back, dismissToast } = useResort();
+  const { route, stays, toast, storageError, remoteError, go, back, dismissToast } = useResort();
   const mainRef = useRef(null);
   const title = titleFor(route, stays);
   const showBack = !['dashboard', 'checkin', 'guests', 'history'].includes(route.name);
@@ -97,6 +97,7 @@ function Shell() {
           ) : <span className="icon-spacer" />}
         </header>
         {storageError ? <div className="banner" role="alert">{storageError}</div> : null}
+        {remoteError ? <div className="banner" role="alert">{remoteError}</div> : null}
         <main className="content">
           {route.name === 'dashboard' && <Dashboard />}
           {route.name === 'checkin' && <CheckIn key={route.room || 'blank'} initialRoom={route.room || ''} />}

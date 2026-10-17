@@ -390,7 +390,7 @@ h2 { margin: 0; font-size: 1.25rem; font-weight: 600; }
   font-size: 1.3rem;
 }
 
-.stepper span { text-align: center; font-weight: 650; }
+.stepper span { text-align: center; font-weight: 600; }
 
 .btn {
   display: inline-flex;

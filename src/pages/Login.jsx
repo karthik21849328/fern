@@ -2,21 +2,30 @@ import { useState } from 'react';
 import { Field } from '../components.jsx';
 import { useAuth } from '../auth.jsx';
 
-const PASSWORD = '222';
-
 export default function Login() {
-  const { unlock } = useAuth();
+  const { login } = useAuth();
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  function onSubmit(event) {
+  async function onSubmit(event) {
     event.preventDefault();
-    if (password.trim() === PASSWORD) {
-      unlock();
+    const value = password.trim();
+    if (!value) {
+      setError('Enter the desk password.');
       return;
     }
-    setError(true);
-    setPassword('');
+
+    setBusy(true);
+    setError('');
+    try {
+      await login(value);
+    } catch (err) {
+      setPassword('');
+      setError(err?.status === 401 ? 'That password is not right.' : 'Could not reach the server. Try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -33,18 +42,20 @@ export default function Login() {
               id="desk-password"
               className={`input${error ? ' invalid' : ''}`}
               type="password"
-              inputMode="numeric"
               autoComplete="current-password"
               autoFocus
+              disabled={busy}
               value={password}
               onChange={(event) => {
                 setPassword(event.target.value);
-                setError(false);
+                setError('');
               }}
             />
           </Field>
-          {error ? <div className="error" role="alert">That password is not right.</div> : <p className="hint">For reception staff.</p>}
-          <button className="btn primary block" type="submit">Enter</button>
+          {error ? <div className="error" role="alert">{error}</div> : <p className="hint">For reception staff.</p>}
+          <button className="btn primary block" type="submit" disabled={busy}>
+            {busy ? 'Signing in…' : 'Enter'}
+          </button>
         </form>
       </div>
     </div>

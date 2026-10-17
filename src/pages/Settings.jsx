@@ -5,24 +5,31 @@ import { useAuth } from '../auth.jsx';
 import { useResort } from '../store.jsx';
 
 export default function Settings() {
-  const { stays, settings, updateSettings, importState, resetAll, notify, go } = useResort();
+  const {
+    stays,
+    settings,
+    rooms,
+    staff,
+    remoteLoading,
+    refreshRemote,
+    updateSettings,
+    importState,
+    resetAll,
+    notify,
+    go,
+  } = useResort();
   const { lock } = useAuth();
-  const [staffName, setStaffName] = useState('');
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
   const [pendingImport, setPendingImport] = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  function addStaff(event) {
-    event.preventDefault();
-    const name = staffName.trim().replace(/\s+/g, ' ');
-    if (!name) return;
-    if (settings.staff.some((item) => item.toLowerCase() === name.toLowerCase())) {
-      notify('That name is already on the list');
-      return;
-    }
-    updateSettings({ staff: [...settings.staff, name] });
-    setStaffName('');
+  async function onRefresh() {
+    setRefreshing(true);
+    await refreshRemote();
+    setRefreshing(false);
+    notify('Rooms and staff refreshed');
   }
 
   function addItem(event) {
@@ -66,11 +73,15 @@ export default function Settings() {
     reader.readAsText(file);
   }
 
+  const roomLabel = rooms.length
+    ? rooms.map((room) => room.room).join(', ')
+    : 'none loaded yet';
+
   return (
     <div className="stack">
       <div>
         <h1 className="page-title">Settings</h1>
-        <p className="lede">Rates and staff for Fenni n Ferns Resort. Guest records stay in this browser on this device.</p>
+        <p className="lede">Rates for Fenni n Ferns Resort. Rooms and staff come from the server. Guest records stay in this browser.</p>
       </div>
 
       <section className="card stack">
@@ -89,7 +100,7 @@ export default function Settings() {
             }}
           />
         </Field>
-        <p className="hint">Current default {inr(settings.roomRate)} per night. Rooms are 101, 102, 103, 104, 105, and 106.</p>
+        <p className="hint">Current default {inr(settings.roomRate)} per night. Active rooms: {roomLabel}.</p>
       </section>
 
       <section className="card stack">
@@ -131,25 +142,43 @@ export default function Settings() {
       </section>
 
       <section className="card stack">
-        <h2>Staff</h2>
-        <p className="hint">These names appear in the “Added by” list when something is put on a bill.</p>
-        {settings.staff.map((name) => (
-          <div className="staff-row" key={name}>
-            <span>{name}</span>
-            <button
-              type="button"
-              className="btn small ghost"
-              disabled={settings.staff.length === 1}
-              onClick={() => updateSettings({ staff: settings.staff.filter((item) => item !== name) })}
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-        <form className="staff-add" onSubmit={addStaff}>
-          <input className="input" value={staffName} onChange={(event) => setStaffName(event.target.value)} placeholder="Add a name" aria-label="Staff name" />
-          <button className="btn primary" type="submit">Add</button>
-        </form>
+        <div className="section-head">
+          <h2>Staff</h2>
+          <button type="button" className="text-btn" disabled={refreshing || remoteLoading} onClick={onRefresh}>
+            {refreshing || remoteLoading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+        <p className="hint">Loaded from the server. These names appear in the “Added by” list on a stay.</p>
+        {staff.length === 0 ? (
+          <p className="empty">{remoteLoading ? 'Loading staff…' : 'No active staff came back from the server.'}</p>
+        ) : (
+          staff.map((person) => (
+            <div className="staff-row" key={person.id}>
+              <span>{person.name}</span>
+              <span className="hint">Active</span>
+            </div>
+          ))
+        )}
+      </section>
+
+      <section className="card stack">
+        <h2>Rooms from server</h2>
+        {rooms.length === 0 ? (
+          <p className="empty">{remoteLoading ? 'Loading rooms…' : 'No active rooms came back from the server.'}</p>
+        ) : (
+          rooms.map((room) => (
+            <div className="staff-row" key={room.id}>
+              <span>Room {room.room}</span>
+              <span className="hint">
+                {[
+                  room.status === 'occupied' ? `Occupied${room.stay?.guestName ? ` · ${room.stay.guestName}` : ''}` : 'Vacant',
+                  room.metadata?.type,
+                  room.metadata?.floor != null ? `Floor ${room.metadata.floor}` : '',
+                ].filter(Boolean).join(' · ')}
+              </span>
+            </div>
+          ))
+        )}
       </section>
 
       <section className="card stack">

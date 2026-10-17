@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { BillView, Dialog, Field, IdThumbs, Segmented, Stepper } from '../components.jsx';
 import { billFor, billedThrough, datesAreValid } from '../lib/billing.js';
-import { PAYMENT_MODES, ROOMS } from '../lib/constants.js';
+import { PAYMENT_MODES } from '../lib/constants.js';
 import { formatFull, formatWhen, fromDatetimeLocal, inr, toDatetimeLocal } from '../lib/format.js';
-import { activeByRoom } from '../lib/storage.js';
 import { useResort } from '../store.jsx';
 
 export default function Stay() {
@@ -22,14 +21,16 @@ export default function Stay() {
 }
 
 function OpenStay({ stay }) {
-  const { stays, settings, updateStay, restoreExtra, removeStay, go, notify } = useResort();
+  const { settings, rooms, roomNumbers, staffNames, checkoutStay, updateStay, restoreExtra, removeStay, go, notify } = useResort();
   const [settling, setSettling] = useState(false);
   const [billThrough, setBillThrough] = useState(() => toDatetimeLocal(billedThrough(stay)));
   const [payMode, setPayMode] = useState(stay.paymentMode);
   const [discount, setDiscount] = useState(String(stay.discount || 0));
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState('');
 
-  const occupied = activeByRoom(stays);
+  const occupied = new Set(rooms.filter((room) => room.status === 'occupied' && room.room !== stay.room).map((room) => room.room));
   const throughIso = settling ? fromDatetimeLocal(billThrough) : billedThrough(stay);
   const discountValue = settling ? Number(discount) || 0 : stay.discount;
   const bill = billFor(stay, new Date(), { through: throughIso, discount: discountValue });
@@ -39,19 +40,28 @@ function OpenStay({ stay }) {
     setPayMode(stay.paymentMode);
     setDiscount(String(stay.discount || 0));
     setBillThrough(toDatetimeLocal(billedThrough(stay)));
+    setCheckoutError('');
     setSettling(true);
   }
 
-  function complete() {
-    if (!canSettle) return;
-    updateStay(stay.id, {
-      status: 'out',
-      checkOut: throughIso,
-      actualCheckOut: new Date().toISOString(),
-      paymentMode: payMode,
-      discount: bill.discount,
-    });
-    notify(`Collected ${inr(bill.total)} from ${stay.guestName || 'guest'}`);
+  async function complete() {
+    if (!canSettle || checkingOut) return;
+    setCheckingOut(true);
+    setCheckoutError('');
+    try {
+      const result = await checkoutStay({
+        stayId: stay.id,
+        billThrough: throughIso,
+        discount: bill.discount,
+        paymentMode: payMode,
+      });
+      const total = result?.bill?.total ?? bill.total;
+      notify(`Collected ${inr(total)} from ${stay.guestName || 'guest'}`);
+    } catch (err) {
+      setCheckoutError(err?.message || 'Checkout failed. Try again.');
+    } finally {
+      setCheckingOut(false);
+    }
   }
 
   return (
@@ -126,7 +136,7 @@ function OpenStay({ stay }) {
           </Field>
           <Field id="edit-room" label="Room">
             <select id="edit-room" className="select" value={stay.room} onChange={(event) => updateStay(stay.id, { room: event.target.value })}>
-              {ROOMS.filter((room) => room === stay.room || !occupied.has(room)).map((room) => (
+              {[stay.room, ...roomNumbers.filter((room) => room !== stay.room && !occupied.has(String(room)))].map((room) => (
                 <option key={room}>{room}</option>
               ))}
             </select>
@@ -152,6 +162,7 @@ function OpenStay({ stay }) {
             <Segmented label="Payment mode" value={payMode} options={PAYMENT_MODES} onChange={setPayMode} />
           </Field>
           <BillView stay={{ ...stay, status: 'in' }} bill={bill} paymentMode={payMode} />
+          {checkoutError ? <div className="error" role="alert">{checkoutError}</div> : null}
         </section>
       ) : null}
 
@@ -162,8 +173,10 @@ function OpenStay({ stay }) {
         </div>
         {settling ? (
           <div className="dock-actions">
-            <button type="button" className="btn ghost" onClick={() => setSettling(false)}>Back</button>
-            <button type="button" className="btn primary" disabled={!canSettle} onClick={complete}>Complete</button>
+            <button type="button" className="btn ghost" disabled={checkingOut} onClick={() => setSettling(false)}>Back</button>
+            <button type="button" className="btn primary" disabled={!canSettle || checkingOut} onClick={complete}>
+              {checkingOut ? 'Saving…' : 'Complete'}
+            </button>
           </div>
         ) : (
           <button type="button" className="btn primary" onClick={openSettle}>Check out</button>
@@ -188,13 +201,13 @@ function OpenStay({ stay }) {
         </Dialog>
       ) : null}
 
-      <p className="hint">Catalog prices for new extras come from Settings. {settings.staff.join(' and ')} are on the added-by list.</p>
+      <p className="hint">Catalog prices for new extras come from Settings. {staffNames.length ? `${staffNames.join(' and ')} are on the added-by list.` : 'Staff names load from the server.'}</p>
     </div>
   );
 }
 
 function ExtraForm({ stay, onRemove }) {
-  const { settings, updateStay, notify } = useResort();
+  const { settings, staffNames, updateStay, notify } = useResort();
   const [draft, setDraft] = useState({
     custom: false,
     itemId: '',
@@ -319,7 +332,7 @@ function ExtraForm({ stay, onRemove }) {
             }}
           >
             <option value="">Select staff</option>
-            {settings.staff.map((name) => <option key={name} value={name}>{name}</option>)}
+            {staffNames.map((name) => <option key={name} value={name}>{name}</option>)}
             <option value="__other">Someone else</option>
           </select>
         </Field>

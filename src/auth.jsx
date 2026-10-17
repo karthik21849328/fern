@@ -1,22 +1,29 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { loginWithPassword } from './lib/api.js';
 
-const KEY = 'Fenni n Ferns-desk-open';
+const TOKEN_KEY = 'Fenni n Ferns-desk-token';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [open, setOpen] = useState(() => sessionStorage.getItem(KEY) === '1');
+  const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) || '');
+  const open = Boolean(token);
 
-  function unlock() {
-    sessionStorage.setItem(KEY, '1');
-    setOpen(true);
-  }
+  const login = useCallback(async (password) => {
+    const nextToken = await loginWithPassword(password);
+    sessionStorage.setItem(TOKEN_KEY, nextToken);
+    setToken(nextToken);
+    return nextToken;
+  }, []);
 
-  function lock() {
-    sessionStorage.removeItem(KEY);
-    setOpen(false);
-  }
+  const lock = useCallback(() => {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem('Fenni n Ferns-desk-open');
+    setToken('');
+  }, []);
 
-  return <AuthContext.Provider value={{ open, unlock, lock }}>{children}</AuthContext.Provider>;
+  const value = useMemo(() => ({ open, token, login, lock }), [open, token, login, lock]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

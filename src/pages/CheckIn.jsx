@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Field, Segmented, Stepper } from '../components.jsx';
 import { datesAreValid, nightCount } from '../lib/billing.js';
-import { PAYMENT_MODES, ROOMS, SOURCES } from '../lib/constants.js';
+import { PAYMENT_MODES, SOURCES } from '../lib/constants.js';
 import { fromDatetimeLocal, inr, nightsLabel, toDatetimeLocal } from '../lib/format.js';
 import { compressImage } from '../lib/images.js';
-import { activeByRoom } from '../lib/storage.js';
 import { useResort } from '../store.jsx';
 
 function defaultCheckout() {
@@ -34,12 +33,16 @@ function emptyForm(room, settings) {
 }
 
 export default function CheckIn({ initialRoom = '' }) {
-  const { stays, settings, checkIn, go, notify } = useResort();
+  const { settings, rooms, roomNumbers, vacantRooms, remoteLoading, checkIn, go, notify } = useResort();
   const [form, setForm] = useState(() => emptyForm(initialRoom, settings));
   const [errors, setErrors] = useState({});
   const [uploading, setUploading] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
-  const occupied = activeByRoom(stays);
+  const occupiedByRoom = new Map(
+    rooms.filter((room) => room.status === 'occupied').map((room) => [room.room, room]),
+  );
   const checkInIso = fromDatetimeLocal(form.checkIn);
   const checkOutIso = fromDatetimeLocal(form.checkOut);
   const datesOk = datesAreValid(checkInIso, checkOutIso);
@@ -68,8 +71,8 @@ export default function CheckIn({ initialRoom = '' }) {
   function validate() {
     const next = {};
     if (!form.room) next.room = 'Choose a room';
-    else if (!ROOMS.includes(form.room)) next.room = 'Choose a room from 101 to 106';
-    else if (occupied.has(form.room)) next.room = 'That room already has a guest';
+    else if (!roomNumbers.includes(form.room)) next.room = 'Choose a room from the list';
+    else if (occupiedByRoom.has(form.room)) next.room = 'That room already has a guest';
     if (!datesOk) next.checkOut = 'Check-out must be after check-in';
     if (!form.guestName.trim() || form.guestName.trim().length < 2) next.guestName = 'Enter the guest name';
     if (form.phone.replace(/\D/g, '').length < 8) next.phone = 'Enter a valid phone number';
@@ -81,29 +84,48 @@ export default function CheckIn({ initialRoom = '' }) {
     return next;
   }
 
-  function onSubmit(event) {
+  async function onSubmit(event) {
     event.preventDefault();
     const nextErrors = validate();
     setErrors(nextErrors);
+    setSubmitError('');
     if (Object.keys(nextErrors).length > 0) return;
 
-    const stay = checkIn({
-      room: form.room,
-      guestName: form.guestName.trim().replace(/\s+/g, ' '),
-      phone: form.phone.trim(),
-      address: form.address.trim(),
-      adults: form.adults,
-      children: form.children,
-      checkIn: checkInIso,
-      checkOut: checkOutIso,
-      source: form.source === 'Other' ? form.sourceOther.trim() : form.source,
-      paymentMode: form.paymentMode,
-      roomRate: rate,
-      idFront: form.idFront,
-      idBack: form.idBack,
-    });
-    notify(`Checked ${stay.guestName} into room ${stay.room}`);
-    go({ name: 'stay', id: stay.id });
+    const selectedRoom = rooms.find((room) => room.room === form.room);
+    if (!selectedRoom?.id) {
+      setSubmitError('Choose a room from the server list.');
+      return;
+    }
+    if (selectedRoom.status === 'occupied') {
+      setSubmitError('That room already has a guest.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const stay = await checkIn({
+        room: form.room,
+        roomUuid: selectedRoom.id,
+        guestName: form.guestName.trim().replace(/\s+/g, ' '),
+        phone: form.phone.trim(),
+        address: form.address.trim(),
+        adults: form.adults,
+        children: form.children,
+        checkIn: checkInIso,
+        checkOut: checkOutIso,
+        source: form.source === 'Other' ? form.sourceOther.trim() : form.source,
+        paymentMode: form.paymentMode,
+        roomRate: rate,
+        idFront: form.idFront,
+        idBack: form.idBack,
+      });
+      notify(`Checked ${stay.guestName} into room ${stay.room}`);
+      go({ name: 'stay', id: stay.id });
+    } catch (err) {
+      setSubmitError(err?.message || 'Check-in failed. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -113,30 +135,33 @@ export default function CheckIn({ initialRoom = '' }) {
         <p className="lede">Room, guest, where they came from, and how they will pay. Extras can be added on the stay.</p>
       </div>
       {Object.keys(errors).length > 0 ? <div className="form-error" role="alert">Please fix the highlighted fields.</div> : null}
+      {submitError ? <div className="form-error" role="alert">{submitError}</div> : null}
 
       <section className="card stack tight">
         <h2>Room</h2>
         <div className="room-grid compact" role="radiogroup" aria-label="Room">
-          {ROOMS.map((room) => {
-            const taken = occupied.get(room);
-            const selected = form.room === room;
+          {rooms.map((room) => {
+            const taken = room.status === 'occupied';
+            const selected = form.room === room.room;
             return (
               <button
-                key={room}
+                key={room.id}
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                disabled={Boolean(taken)}
+                disabled={taken}
                 className={`room-card pick${selected ? ' is-in' : ''}${taken ? ' is-taken' : ''}`}
-                onClick={() => setField('room', room)}
+                onClick={() => setField('room', room.room)}
               >
-                <span className="room-no">{room}</span>
-                <span className="room-meta">{taken ? taken.guestName || 'Occupied' : 'Free'}</span>
+                <span className="room-no">{room.room}</span>
+                <span className="room-meta">{taken ? room.stay?.guestName || 'Occupied' : 'Free'}</span>
               </button>
             );
           })}
         </div>
-        {occupied.size === ROOMS.length ? <p className="hint">All six rooms are occupied. Check a guest out to free a room.</p> : null}
+        {remoteLoading && rooms.length === 0 ? <p className="hint">Loading rooms…</p> : null}
+        {!remoteLoading && rooms.length === 0 ? <p className="hint">No active rooms are available from the server.</p> : null}
+        {!remoteLoading && vacantRooms.length === 0 && rooms.length > 0 ? <p className="hint">All rooms are occupied. Check a guest out to free a room.</p> : null}
         {errors.room ? <div className="error">{errors.room}</div> : null}
       </section>
 
@@ -237,8 +262,8 @@ export default function CheckIn({ initialRoom = '' }) {
           <span className="hint">Room charge</span>
           <strong className="money">{roomCharge ? inr(roomCharge) : '—'}</strong>
         </div>
-        <button className="btn primary" type="submit" disabled={Boolean(uploading)}>
-          {uploading ? 'Reading photo…' : 'Check in'}
+        <button className="btn primary" type="submit" disabled={Boolean(uploading) || submitting || vacantRooms.length === 0}>
+          {uploading ? 'Reading photo…' : submitting ? 'Checking in…' : 'Check in'}
         </button>
       </div>
     </form>
