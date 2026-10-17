@@ -1,7 +1,5 @@
 """
-fern03 Lambda: room occupancy (GET) + check-in / check-out (POST).
-
-Deploy this file as fern03 (replace the previous GET-only handler).
+fern03: GET rooms + POST check-in / check-out / extras
 """
 import json
 import os
@@ -82,9 +80,28 @@ def get_type(params, body=None):
     return type_param
 
 
+def normalize_extra(extra):
+    if not extra or not isinstance(extra, dict):
+        return None
+    return {
+        "id": str(extra.get("id") or uuid.uuid4()),
+        "name": str(extra.get("name") or "").strip(),
+        "qty": max(0, int(extra.get("qty") or 0)),
+        "unit_price": max(0.0, float(extra.get("unit_price", extra.get("unitPrice", 0)) or 0)),
+        "added_by": str(extra.get("added_by") or extra.get("addedBy") or "").strip(),
+        "added_at": extra.get("added_at") or extra.get("addedAt") or datetime.utcnow().isoformat() + "Z",
+    }
+
+
 def build_stay_summary(stay, for_checkout=False):
     if not stay:
         return None
+
+    extras = []
+    for item in stay.get("extras") or []:
+        normalized = normalize_extra(item)
+        if normalized and normalized["name"]:
+            extras.append(normalized)
 
     summary = {
         "id": stay.get("id"),
@@ -96,17 +113,17 @@ def build_stay_summary(stay, for_checkout=False):
         "check_out": stay.get("check_out"),
         "payment_mode": stay.get("payment_mode"),
         "source": stay.get("source"),
+        "room_rate": stay.get("room_rate"),
+        "discount": stay.get("discount", 0),
+        "extras": extras,
+        "address": stay.get("address"),
+        "id_front_url": stay.get("id_front_url"),
+        "id_back_url": stay.get("id_back_url"),
+        "status": stay.get("status"),
     }
 
     if for_checkout:
         summary.update({
-            "address": stay.get("address"),
-            "room_rate": stay.get("room_rate"),
-            "discount": stay.get("discount", 0),
-            "extras": stay.get("extras") or [],
-            "id_front_url": stay.get("id_front_url"),
-            "id_back_url": stay.get("id_back_url"),
-            "status": stay.get("status"),
             "created_at": stay.get("created_at"),
             "actual_check_out": stay.get("actual_check_out"),
             "settled_total": stay.get("settled_total"),
@@ -134,11 +151,12 @@ def compute_bill(stay, bill_through=None, discount=None):
     extras_total = 0.0
     extra_lines = []
     for extra in extras:
-        qty = max(0, int(extra.get("qty") or 0))
-        unit_price = max(0.0, float(extra.get("unit_price") or 0))
+        normalized = normalize_extra(extra) or {}
+        qty = normalized.get("qty", 0)
+        unit_price = normalized.get("unit_price", 0.0)
         line_total = round(qty * unit_price, 2)
         extras_total += line_total
-        extra_lines.append({**extra, "line_total": line_total})
+        extra_lines.append({**normalized, "line_total": line_total})
 
     extras_total = round(extras_total, 2)
     subtotal = round(room_total + extras_total, 2)
@@ -159,7 +177,6 @@ def compute_bill(stay, bill_through=None, discount=None):
 
 
 def list_rooms(db, request_type):
-    # checkin -> vacant, checkout -> occupied, all -> all
     mapping = {
         "checkin": "vacant",
         "checkout": "occupied",
@@ -185,22 +202,22 @@ def list_rooms(db, request_type):
         "room_id": 1,
         "guest_name": 1,
         "phone": 1,
+        "address": 1,
         "adults": 1,
         "children": 1,
         "check_in": 1,
         "check_out": 1,
         "payment_mode": 1,
         "source": 1,
+        "room_rate": 1,
+        "discount": 1,
+        "extras": 1,
+        "id_front_url": 1,
+        "id_back_url": 1,
+        "status": 1,
     }
     if for_checkout:
         stay_projection.update({
-            "address": 1,
-            "room_rate": 1,
-            "discount": 1,
-            "extras": 1,
-            "id_front_url": 1,
-            "id_back_url": 1,
-            "status": 1,
             "created_at": 1,
             "actual_check_out": 1,
             "settled_total": 1,
@@ -356,6 +373,80 @@ def do_checkout(db, body):
     })
 
 
+def do_add_extra(db, body):
+    stay_id = body.get("stay_id")
+    if not stay_id:
+        return response(400, {"error": "stay_id is required"})
+
+    stay = db["stays"].find_one({"id": stay_id}, {"_id": 0})
+    if not stay:
+        return response(404, {"error": "Stay not found"})
+    if stay.get("status") != "in":
+        return response(400, {"error": "Cannot add extras to a checked-out stay"})
+
+    nested = body.get("extra") if isinstance(body.get("extra"), dict) else {}
+    extra = normalize_extra({
+        "id": body.get("extra_id") or nested.get("id"),
+        "name": body.get("name") or nested.get("name"),
+        "qty": body.get("qty", nested.get("qty")),
+        "unit_price": body.get("unit_price", body.get("unitPrice", nested.get("unit_price", nested.get("unitPrice")))),
+        "added_by": body.get("added_by", body.get("addedBy", nested.get("added_by", nested.get("addedBy")))),
+        "added_at": body.get("added_at", body.get("addedAt", nested.get("added_at", nested.get("addedAt")))),
+    })
+
+    if not extra or not extra["name"]:
+        return response(400, {"error": "name is required for extra"})
+    if extra["qty"] < 1:
+        return response(400, {"error": "qty must be at least 1"})
+    if not extra["added_by"]:
+        return response(400, {"error": "added_by is required"})
+
+    extras = list(stay.get("extras") or [])
+    # Replace if same id already present (idempotent / undo restore)
+    extras = [item for item in extras if str(item.get("id")) != extra["id"]]
+    extras.append(extra)
+
+    db["stays"].update_one({"id": stay_id}, {"$set": {"extras": extras}})
+
+    return response(200, {
+        "message": "Extra added",
+        "type": "extra",
+        "stay_id": stay_id,
+        "extra": extra,
+        "extras": extras,
+    })
+
+
+def do_remove_extra(db, body):
+    stay_id = body.get("stay_id") or body.get("id")
+    extra_id = body.get("extra_id") or body.get("extraId")
+    if not stay_id:
+        return response(400, {"error": "stay_id is required"})
+    if not extra_id:
+        return response(400, {"error": "extra_id is required"})
+
+    stay = db["stays"].find_one({"id": stay_id}, {"_id": 0})
+    if not stay:
+        return response(404, {"error": "Stay not found"})
+    if stay.get("status") != "in":
+        return response(400, {"error": "Cannot change extras on a checked-out stay"})
+
+    extras = list(stay.get("extras") or [])
+    next_extras = [item for item in extras if str(item.get("id")) != str(extra_id)]
+    if len(next_extras) == len(extras):
+        return response(404, {"error": "Extra not found on this stay"})
+
+    db["stays"].update_one({"id": stay_id}, {"$set": {"extras": next_extras}})
+
+    return response(200, {
+        "message": "Extra removed",
+        "type": "remove_extra",
+        "stay_id": stay_id,
+        "extra_id": str(extra_id),
+        "extras": next_extras,
+    })
+
+
 def lambda_handler(event, context):
     try:
         if not event:
@@ -388,24 +479,27 @@ def lambda_handler(event, context):
                 return response(400, {"error": f"Invalid JSON body: {str(e)}"})
 
         request_type = get_type(params, body)
-
         db = get_db()
 
-        # GET: list rooms for check-in / check-out screens
         if method == "GET":
             return list_rooms(db, request_type or "all")
 
-        # POST: perform check-in or check-out
         if method == "POST":
             if request_type == "checkin":
                 return do_checkin(db, body)
             if request_type == "checkout":
                 return do_checkout(db, body)
+            if request_type == "extra":
+                return do_add_extra(db, body)
+            if request_type in {"remove_extra", "removeextra"}:
+                return do_remove_extra(db, body)
             return response(400, {
-                "error": "For POST, type must be checkin or checkout",
+                "error": "For POST, type must be checkin, checkout, extra, or remove_extra",
                 "examples": [
                     "POST ?type=checkin",
                     "POST ?type=checkout",
+                    "POST ?type=extra",
+                    "POST ?type=remove_extra",
                 ],
             })
 

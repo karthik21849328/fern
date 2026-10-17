@@ -1,6 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './auth.jsx';
-import { checkInStay as checkInStayApi, checkoutStay as checkoutStayApi, fetchRooms, fetchStaff } from './lib/api.js';
+import {
+  addStayExtra as addStayExtraApi,
+  checkInStay as checkInStayApi,
+  checkoutStay as checkoutStayApi,
+  fetchRooms,
+  fetchStaff,
+  removeStayExtra as removeStayExtraApi,
+} from './lib/api.js';
 import { clearBrowserCache, createDefaultSettings } from './lib/storage.js';
 
 const ResortContext = createContext(null);
@@ -266,13 +273,50 @@ export function ResortProvider({ children }) {
     setStays((current) => current.map((stay) => (stay.id === id ? { ...stay, ...patch } : stay)));
   }, []);
 
-  const restoreExtra = useCallback((stayId, extra) => {
-    setStays((current) => current.map((stay) => {
-      if (stay.id !== stayId) return stay;
-      if (stay.extras.some((item) => item.id === extra.id)) return stay;
-      return { ...stay, extras: [...stay.extras, extra] };
-    }));
+  const applyExtras = useCallback((stayId, extras) => {
+    setStays((current) => current.map((stay) => (
+      stay.id === stayId ? { ...stay, extras } : stay
+    )));
   }, []);
+
+  const addExtra = useCallback(async (stayId, extra) => {
+    if (!token) throw new Error('Not signed in');
+    const result = await addStayExtraApi(token, { stayId, extra });
+    const extras = result.extras?.length
+      ? result.extras
+      : undefined;
+    if (extras) {
+      applyExtras(stayId, extras);
+    } else {
+      setStays((current) => current.map((stay) => {
+        if (stay.id !== stayId) return stay;
+        const next = result.extra || extra;
+        if (stay.extras.some((item) => item.id === next.id)) {
+          return { ...stay, extras: stay.extras.map((item) => (item.id === next.id ? next : item)) };
+        }
+        return { ...stay, extras: [...stay.extras, next] };
+      }));
+    }
+    return result.extra || extra;
+  }, [token, applyExtras]);
+
+  const removeExtra = useCallback(async (stayId, extraId) => {
+    if (!token) throw new Error('Not signed in');
+    const result = await removeStayExtraApi(token, { stayId, extraId });
+    if (Array.isArray(result.extras)) {
+      applyExtras(stayId, result.extras);
+    } else {
+      setStays((current) => current.map((stay) => (
+        stay.id === stayId
+          ? { ...stay, extras: stay.extras.filter((item) => item.id !== extraId) }
+          : stay
+      )));
+    }
+  }, [token, applyExtras]);
+
+  const restoreExtra = useCallback(async (stayId, extra) => {
+    await addExtra(stayId, extra);
+  }, [addExtra]);
 
   const removeStay = useCallback((id) => {
     setStays((current) => current.filter((stay) => stay.id !== id));
@@ -342,6 +386,8 @@ export function ResortProvider({ children }) {
       checkIn,
       checkoutStay,
       updateStay,
+      addExtra,
+      removeExtra,
       restoreExtra,
       removeStay,
       updateSettings,
@@ -369,6 +415,8 @@ export function ResortProvider({ children }) {
       checkIn,
       checkoutStay,
       updateStay,
+      addExtra,
+      removeExtra,
       restoreExtra,
       removeStay,
       updateSettings,

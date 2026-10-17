@@ -17,6 +17,18 @@ function apiError(response, data) {
   return error;
 }
 
+function mapExtra(extra) {
+  if (!extra || typeof extra !== 'object') return null;
+  return {
+    id: String(extra.id || ''),
+    name: String(extra.name || ''),
+    qty: Number(extra.qty) || 0,
+    unitPrice: Number(extra.unit_price ?? extra.unitPrice) || 0,
+    addedBy: String(extra.added_by || extra.addedBy || ''),
+    addedAt: extra.added_at || extra.addedAt || null,
+  };
+}
+
 function mapStay(stay) {
   if (!stay || typeof stay !== 'object') return null;
   return {
@@ -32,7 +44,7 @@ function mapStay(stay) {
     source: String(stay.source || ''),
     roomRate: Number(stay.room_rate ?? stay.roomRate) || 0,
     discount: Number(stay.discount) || 0,
-    extras: Array.isArray(stay.extras) ? stay.extras : [],
+    extras: Array.isArray(stay.extras) ? stay.extras.map(mapExtra).filter(Boolean) : [],
     idFront: stay.id_front_url || stay.idFront || null,
     idBack: stay.id_back_url || stay.idBack || null,
     status: stay.status === 'out' ? 'out' : 'in',
@@ -146,6 +158,54 @@ export async function checkoutStay(token, payload) {
   const data = await parseJson(response);
   if (!response.ok) throw apiError(response, data);
   return data;
+}
+
+export async function addStayExtra(token, payload) {
+  const url = `${ROOMS_URL}?type=extra`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      stay_id: payload.stayId,
+      extra_id: payload.extra?.id,
+      name: payload.extra?.name,
+      qty: payload.extra?.qty,
+      unit_price: payload.extra?.unitPrice,
+      added_by: payload.extra?.addedBy,
+      added_at: payload.extra?.addedAt,
+    }),
+  });
+  const data = await parseJson(response);
+  if (!response.ok) throw apiError(response, data);
+  return {
+    ...data,
+    extras: Array.isArray(data?.extras) ? data.extras.map(mapExtra).filter(Boolean) : [],
+    extra: mapExtra(data?.extra),
+  };
+}
+
+export async function removeStayExtra(token, payload) {
+  const url = `${ROOMS_URL}?type=remove_extra`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      stay_id: payload.stayId,
+      extra_id: payload.extraId,
+    }),
+  });
+  const data = await parseJson(response);
+  if (!response.ok) throw apiError(response, data);
+  return {
+    ...data,
+    extras: Array.isArray(data?.extras) ? data.extras.map(mapExtra).filter(Boolean) : [],
+  };
 }
 
 export async function fetchStaff() {

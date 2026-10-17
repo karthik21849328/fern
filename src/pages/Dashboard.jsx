@@ -29,9 +29,9 @@ export default function Dashboard() {
       paymentMode: room.stay.paymentMode,
       checkIn: room.stay.checkIn,
       checkOut: room.stay.checkOut,
-      roomRate: settings.roomRate,
-      extras: [],
-      discount: 0,
+      roomRate: Number(room.stay.roomRate) || settings.roomRate,
+      extras: Array.isArray(room.stay.extras) ? room.stay.extras : [],
+      discount: Number(room.stay.discount) || 0,
       status: 'in',
     } : null))
     .filter(Boolean)
@@ -93,9 +93,9 @@ export default function Dashboard() {
               const stayForBill = localStay || (room.stay ? {
                 ...room.stay,
                 room: room.room,
-                roomRate: settings.roomRate,
-                extras: [],
-                discount: 0,
+                roomRate: Number(room.stay.roomRate) || settings.roomRate,
+                extras: Array.isArray(room.stay.extras) ? room.stay.extras : [],
+                discount: Number(room.stay.discount) || 0,
                 status: 'in',
               } : null);
               const timing = stayForBill ? stayTiming(stayForBill) : 'vacant';

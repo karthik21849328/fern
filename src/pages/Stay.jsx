@@ -21,7 +21,7 @@ export default function Stay() {
 }
 
 function OpenStay({ stay }) {
-  const { settings, rooms, roomNumbers, staffNames, checkoutStay, updateStay, restoreExtra, removeStay, go, notify } = useResort();
+  const { settings, rooms, roomNumbers, staffNames, checkoutStay, updateStay, removeExtra, restoreExtra, removeStay, go, notify } = useResort();
   const [settling, setSettling] = useState(false);
   const [billThrough, setBillThrough] = useState(() => toDatetimeLocal(billedThrough(stay)));
   const [payMode, setPayMode] = useState(stay.paymentMode);
@@ -78,9 +78,15 @@ function OpenStay({ stay }) {
 
       {!settling ? <BillView stay={stay} bill={bill} paymentMode={stay.paymentMode} /> : null}
 
-      <ExtraForm stay={stay} onRemove={(extra) => {
-        updateStay(stay.id, { extras: stay.extras.filter((item) => item.id !== extra.id) });
-        notify(`${extra.name} removed`, () => restoreExtra(stay.id, extra));
+      <ExtraForm stay={stay} onRemove={async (extra) => {
+        try {
+          await removeExtra(stay.id, extra.id);
+          notify(`${extra.name} removed`, () => {
+            restoreExtra(stay.id, extra).catch(() => {});
+          });
+        } catch (err) {
+          notify(err?.message || 'Could not remove extra');
+        }
       }} />
 
       <details className="fold">
@@ -207,7 +213,7 @@ function OpenStay({ stay }) {
 }
 
 function ExtraForm({ stay, onRemove }) {
-  const { settings, staffNames, updateStay, notify } = useResort();
+  const { settings, staffNames, addExtra, notify } = useResort();
   const [draft, setDraft] = useState({
     custom: false,
     itemId: '',
@@ -219,6 +225,7 @@ function ExtraForm({ stay, onRemove }) {
     otherName: '',
   });
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   function chooseItem(item) {
     setDraft((current) => ({
@@ -231,7 +238,7 @@ function ExtraForm({ stay, onRemove }) {
     setError('');
   }
 
-  function addExtra(event) {
+  async function onAddExtra(event) {
     event.preventDefault();
     const name = draft.name.trim();
     const price = Number(draft.unitPrice);
@@ -256,15 +263,22 @@ function ExtraForm({ stay, onRemove }) {
       addedBy: who,
       addedAt: new Date().toISOString(),
     };
-    updateStay(stay.id, { extras: [...stay.extras, extra] });
-    setDraft((current) => ({
-      ...current,
-      qty: 1,
-      name: current.custom ? '' : current.name,
-      unitPrice: current.custom ? '' : current.unitPrice,
-    }));
+    setSaving(true);
     setError('');
-    notify(`${name} added by ${who}`);
+    try {
+      await addExtra(stay.id, extra);
+      setDraft((current) => ({
+        ...current,
+        qty: 1,
+        name: current.custom ? '' : current.name,
+        unitPrice: current.custom ? '' : current.unitPrice,
+      }));
+      notify(`${name} added by ${who}`);
+    } catch (err) {
+      setError(err?.message || 'Could not save extra. Redeploy fern03 with extras support.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -288,7 +302,7 @@ function ExtraForm({ stay, onRemove }) {
         </div>
       )}
 
-      <form className="stack" onSubmit={addExtra}>
+      <form className="stack" onSubmit={onAddExtra}>
         <div className="chip-row" role="listbox" aria-label="Extra items">
           {settings.catalog.map((item) => (
             <button
@@ -342,7 +356,7 @@ function ExtraForm({ stay, onRemove }) {
           </Field>
         ) : null}
         {error ? <div className="error">{error}</div> : null}
-        <button className="btn primary block" type="submit">Add to bill</button>
+        <button className="btn primary block" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Add to bill'}</button>
       </form>
     </section>
   );
