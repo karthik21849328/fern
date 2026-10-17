@@ -213,7 +213,7 @@ function OpenStay({ stay }) {
 }
 
 function ExtraForm({ stay, onRemove }) {
-  const { settings, staffNames, addExtra, notify } = useResort();
+  const { settings, staffNames, addExtra, go, notify } = useResort();
   const [draft, setDraft] = useState({
     custom: false,
     itemId: '',
@@ -267,13 +267,8 @@ function ExtraForm({ stay, onRemove }) {
     setError('');
     try {
       await addExtra(stay.id, extra);
-      setDraft((current) => ({
-        ...current,
-        qty: 1,
-        name: current.custom ? '' : current.name,
-        unitPrice: current.custom ? '' : current.unitPrice,
-      }));
       notify(`${name} added by ${who}`);
+      go({ name: 'dashboard' });
     } catch (err) {
       setError(err?.message || 'Could not save extra. Redeploy fern03 with extras support.');
     } finally {
