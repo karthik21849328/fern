@@ -19,7 +19,7 @@ export default function History() {
     <div className="stack">
       <div>
         <h1 className="page-title">History</h1>
-        <p className="lede">Settled stays and the amount that was collected.</p>
+        <p className="lede">Checkouts from this session. Occupancy always comes from the server.</p>
       </div>
       <SearchBox value={query} onChange={setQuery} placeholder="Search past guests" />
       {past.length === 0 ? (

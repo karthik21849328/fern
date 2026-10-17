@@ -6,14 +6,12 @@ import { useResort } from '../store.jsx';
 
 export default function Settings() {
   const {
-    stays,
     settings,
     rooms,
     staff,
     remoteLoading,
     refreshRemote,
     updateSettings,
-    importState,
     resetAll,
     notify,
     go,
@@ -21,7 +19,6 @@ export default function Settings() {
   const { lock } = useAuth();
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
-  const [pendingImport, setPendingImport] = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -29,7 +26,7 @@ export default function Settings() {
     setRefreshing(true);
     await refreshRemote();
     setRefreshing(false);
-    notify('Rooms and staff refreshed');
+    notify('Rooms and staff refreshed from server');
   }
 
   function addItem(event) {
@@ -47,32 +44,6 @@ export default function Settings() {
     setItemPrice('');
   }
 
-  function exportBackup() {
-    const blob = new Blob([JSON.stringify({ stays, settings }, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Fenni n Ferns-resort-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    notify('Backup downloaded');
-  }
-
-  function onImportFile(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(String(reader.result));
-        if (!Array.isArray(data.stays)) throw new Error('bad');
-        setPendingImport(data);
-      } catch {
-        notify('That file is not a valid backup');
-      }
-    };
-    reader.readAsText(file);
-  }
-
   const roomLabel = rooms.length
     ? rooms.map((room) => room.room).join(', ')
     : 'none loaded yet';
@@ -81,12 +52,12 @@ export default function Settings() {
     <div className="stack">
       <div>
         <h1 className="page-title">Settings</h1>
-        <p className="lede">Rates for Fenni n Ferns Resort. Rooms and staff come from the server. Guest records stay in this browser.</p>
+        <p className="lede">Rooms, staff, and occupancy come from the server. Guest records are not stored in this browser.</p>
       </div>
 
       <section className="card stack">
         <h2>Room rate</h2>
-        <Field id="room-rate" label="Default nightly rate (₹)" hint="Used for the next check-in. Guests already in house keep their own rate.">
+        <Field id="room-rate" label="Default nightly rate (₹)" hint="Used for the next check-in form. Already checked-in guests keep the rate saved on the server.">
           <input
             id="room-rate"
             className="input"
@@ -105,6 +76,7 @@ export default function Settings() {
 
       <section className="card stack">
         <h2>Extras menu</h2>
+        <p className="hint">Local menu for this session only. Used when adding water, juice, and other items on a stay.</p>
         {settings.catalog.map((item) => (
           <div className="catalog-row" key={item.id}>
             <input
@@ -181,63 +153,22 @@ export default function Settings() {
         )}
       </section>
 
-      <section className="card stack">
-        <h2>Backup</h2>
-        <p className="hint">Download a copy before clearing the browser. Import replaces what is on this device.</p>
-        <div className="row-actions">
-          <button type="button" className="btn ghost" onClick={exportBackup}>Export backup</button>
-          <label className="btn ghost">
-            Import backup
-            <input
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = '';
-                onImportFile(file);
-              }}
-            />
-          </label>
-        </div>
-      </section>
-
       <div className="row-actions">
         <button type="button" className="btn ghost" onClick={lock}>Lock desk</button>
-        <button type="button" className="btn danger" onClick={() => setConfirmReset(true)}>Erase all data</button>
+        <button type="button" className="btn danger" onClick={() => setConfirmReset(true)}>Reset local extras menu</button>
       </div>
 
-      {pendingImport ? (
-        <Dialog title="Replace current records?" onClose={() => setPendingImport(null)}>
-          <p>This overwrites stays and settings on this device with the backup file.</p>
-          <div className="dialog-actions">
-            <button type="button" className="btn ghost" onClick={() => setPendingImport(null)}>Cancel</button>
-            <button type="button" className="btn primary" onClick={() => {
-              try {
-                importState(pendingImport);
-                setPendingImport(null);
-                notify('Backup restored');
-                go({ name: 'dashboard' });
-              } catch {
-                setPendingImport(null);
-                notify('That file is not a valid backup');
-              }
-            }}>Replace</button>
-          </div>
-        </Dialog>
-      ) : null}
-
       {confirmReset ? (
-        <Dialog title="Erase everything?" onClose={() => setConfirmReset(false)}>
-          <p>All stays and your price changes will be removed from this browser.</p>
+        <Dialog title="Reset extras menu?" onClose={() => setConfirmReset(false)}>
+          <p>This resets the local extras prices and reloads rooms from the server. Guest data stays on the server.</p>
           <div className="dialog-actions">
             <button type="button" className="btn ghost" onClick={() => setConfirmReset(false)}>Cancel</button>
             <button type="button" className="btn danger" onClick={() => {
               resetAll();
               setConfirmReset(false);
-              notify('All data cleared');
+              notify('Local menu reset');
               go({ name: 'dashboard' });
-            }}>Erase</button>
+            }}>Reset</button>
           </div>
         </Dialog>
       ) : null}

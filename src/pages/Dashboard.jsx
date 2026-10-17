@@ -72,9 +72,9 @@ export default function Dashboard() {
       </div>
       {collected > 0 ? <p className="collected">Collected today {inr(collected)}</p> : null}
 
-      {stays.length === 0 && occupiedRooms.length === 0 ? (
+      {occupiedRooms.length === 0 ? (
         <p className="note">
-          Nightly rate is {inr(settings.roomRate)}. Water, juice, and chocolate prices live in Settings. Change them before the first guest if these are not your rates.
+          Rooms and occupancy load from the server. Nightly rate default is {inr(settings.roomRate)}. Extra item prices are in Settings.
         </p>
       ) : null}
 
