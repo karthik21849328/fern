@@ -119,6 +119,12 @@ export async function checkInStay(token, payload) {
   });
   const data = await parseJson(response);
   if (!response.ok) throw apiError(response, data);
+  // Old fern03 only listed rooms on POST — reject that so we never fake a stay.
+  if (!data?.stay_id && !data?.document?.id) {
+    throw new Error(
+      'Check-in API did not save a stay. Redeploy fern03 with the updated backend/fetch_room.py (POST check-in).',
+    );
+  }
   return data;
 }
 

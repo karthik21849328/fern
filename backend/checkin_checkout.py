@@ -1,3 +1,8 @@
+"""
+fern03 Lambda: room occupancy (GET) + check-in / check-out (POST).
+
+Deploy this file as fern03 (replace the previous GET-only handler).
+"""
 import json
 import os
 import uuid

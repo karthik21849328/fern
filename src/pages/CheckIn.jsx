@@ -125,7 +125,7 @@ export default function CheckIn({ initialRoom = '' }) {
         return;
       }
       notify(`Checked ${stay.guestName || guestName} into room ${stay.room || form.room}`);
-      go({ name: 'stay', id: stay.id });
+      go({ name: 'dashboard' });
     } catch (err) {
       setSubmitError(err?.message || 'Check-in failed. Try again.');
     } finally {
